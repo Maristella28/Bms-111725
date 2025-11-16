@@ -1,0 +1,155 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile-first responsive utilities */
+@layer utilities {
+  /* Prevent horizontal scroll on mobile */
+  .mobile-container {
+    @apply w-full max-w-full overflow-x-hidden;
+  }
+  
+  /* Mobile-friendly text scaling */
+  .mobile-text-responsive {
+    @apply text-xs sm:text-sm md:text-base lg:text-lg;
+  }
+  
+  /* Mobile-friendly spacing */
+  .mobile-spacing {
+    @apply p-2 sm:p-3 md:p-4 lg:p-6;
+  }
+  
+  /* Mobile-friendly gaps */
+  .mobile-gap {
+    @apply gap-2 sm:gap-3 md:gap-4 lg:gap-6;
+  }
+  
+  /* Touch-friendly button sizing */
+  .mobile-button {
+    @apply min-h-[44px] min-w-[44px] px-3 py-2 text-sm;
+  }
+  
+  /* Mobile-friendly card */
+  .mobile-card {
+    @apply rounded-lg sm:rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-5;
+  }
+  
+  /* Prevent text overflow */
+  .mobile-text-truncate {
+    @apply truncate overflow-hidden whitespace-nowrap;
+  }
+  
+  /* Mobile-friendly grid */
+  .mobile-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 lg:gap-4;
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+}
+
+/* Global mobile optimizations */
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+  
+  body {
+    @apply overflow-x-hidden;
+  }
+  
+  /* Ensure all containers respect mobile boundaries */
+  * {
+    @apply box-border;
+  }
+  
+  /* Mobile-friendly focus states */
+  button:focus,
+  input:focus,
+  select:focus,
+  textarea:focus {
+    @apply outline-none ring-2 ring-green-500 ring-opacity-50;
+  }
+}
+
+/* Custom animations for mobile */
+@layer components {
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Notification highlight effect for auto-scrolled elements */
+.notification-highlight {
+  animation: highlightPulse 2s ease-in-out;
+  outline: 3px solid rgba(16, 185, 129, 0.5);
+  outline-offset: 2px;
+  border-radius: 8px;
+  background-color: rgba(16, 185, 129, 0.1);
+  transition: all 0.3s ease;
+}
+
+@keyframes highlightPulse {
+  0% {
+    outline-color: rgba(16, 185, 129, 0.8);
+    background-color: rgba(16, 185, 129, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    outline-color: rgba(16, 185, 129, 0.4);
+    background-color: rgba(16, 185, 129, 0.15);
+    transform: scale(1.01);
+  }
+  100% {
+    outline-color: rgba(16, 185, 129, 0);
+    background-color: rgba(16, 185, 129, 0);
+    transform: scale(1);
+  }
+}

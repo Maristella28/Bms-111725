@@ -1,0 +1,787 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Staff;
+use App\Models\StaffProfile;
+use App\Models\User;
+use App\Mail\VerificationCodeMail;
+use App\Services\ActivityLogService;
+use App\Traits\ChecksStaffPermissions;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rules\Password;
+use Illuminate\Database\QueryException;
+
+class StaffController extends Controller
+{
+    use ChecksStaffPermissions;
+    /**
+     * Display a listing of staff members.
+     */
+    public function index(Request $request)
+    {
+        // Check if user has staff management permission
+        $permissionCheck = $this->checkModulePermission($request, 'staffManagement', 'staff management');
+        if ($permissionCheck) {
+            return $permissionCheck;
+        }
+
+        try {
+            $staff = Staff::where('active', true)->get();
+            return response()->json(['staff' => $staff]);
+        } catch (QueryException $e) {
+            Log::error('Database error in StaffController@index: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to fetch staff list'], 500);
+        } catch (\Exception $e) {
+            Log::error('Error in StaffController@index: ' . $e->getMessage());
+            return response()->json(['message' => 'An unexpected error occurred'], 500);
+        }
+    }
+
+    /**
+     * Store a newly created staff member.
+     */
+    public function store(Request $request)
+    {
+        // Check if user has staff management permission
+        $permissionCheck = $this->checkModulePermission($request, 'staffManagement', 'staff management');
+        if ($permissionCheck) {
+            return $permissionCheck;
+        }
+
+        try {
+            DB::beginTransaction();
+            
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => [
+                    'required', 
+                    'string', 
+                    'email', 
+                    'max:255',
+                    'unique:users,email',
+                    'unique:staff,email'
+                ],
+                'password' => ['required', Password::defaults()],
+                'modulePermissions' => ['required', 'array'],
+                'modulePermissions.*' => ['required', 'boolean'],
+                'department' => ['required', 'string', 'max:255'],
+                'contactNumber' => ['required', 'string', 'max:255'],
+                'position' => ['required', 'string', 'max:255'],
+                'birthdate' => ['required', 'date'],
+                'gender' => ['required', 'string'],
+                'civilStatus' => ['required', 'string'],
+                'address' => ['nullable', 'string'],
+                'selectedResident' => ['nullable']
+            ]);
+
+
+            // Generate 6-digit verification code
+            $verificationCode = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            
+            // Create user account first with verification code
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'role' => 'staff',
+                'residency_status' => 'active',
+                'verification_code' => $verificationCode,
+                'verification_code_expires_at' => now()->addMinutes(5),
+                'privacy_policy_accepted' => true,
+                'privacy_policy_accepted_at' => now(),
+            ]);
+
+            // Send verification code email (same as registration flow)
+            try {
+                // Create the mail instance - VerificationCodeMail handles from address internally
+                $mail = new VerificationCodeMail($user, $verificationCode);
+                
+                // Send the email
+                Mail::to($user->email)->send($mail);
+                
+                Log::info('Staff verification email sent successfully', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'verification_code' => $verificationCode,
+                    'expires_at' => $user->verification_code_expires_at
+                ]);
+            } catch (\Exception $mailError) {
+                Log::error('Failed to send staff verification email:', [
+                    'error' => $mailError->getMessage(),
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'verification_code' => $verificationCode
+                ]);
+                
+                // Log the code for testing purposes
+                Log::info('Staff verification code for testing: ' . $verificationCode);
+                
+                // Don't fail staff creation if email fails, just log it
+                // The user can still verify using the code from logs
+            }
+
+            // Then create staff record
+            // Transform the validated data to match database column names
+            $staffData = [
+                'user_id' => $user->id,
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'department' => $validated['department'],
+                'position' => $validated['position'],
+                'contact_number' => $validated['contactNumber'],
+                'birthdate' => $validated['birthdate'],
+                'gender' => $validated['gender'],
+                'civil_status' => $validated['civilStatus'],
+                'address' => $validated['address'],
+                'resident_id' => $validated['selectedResident'] ?: null, // Handle empty string
+                'active' => true,
+                'module_permissions' => $request->modulePermissions
+            ];
+
+            // Create staff record with properly formatted data
+            $staff = Staff::create($staffData);
+            
+            // Log staff creation
+            $user = Auth::user();
+            if ($user) {
+                ActivityLogService::logCreated($staff, $request);
+            }
+
+            DB::commit();
+
+        return response()->json([
+            'message' => 'Staff account created successfully. Please check your email for the verification code.',
+            'staff' => $staff,
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'requires_verification' => true,
+        ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            Log::error('Validation error creating staff account: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->validator->errors()->all()
+            ], 422);
+        } catch (QueryException $e) {
+            DB::rollBack();
+            Log::error('Database error creating staff account: ' . $e->getMessage());
+            
+            // Check for duplicate email
+            if ($e->getCode() === '23000') { // Integrity constraint violation
+                return response()->json([
+                    'message' => 'Email address is already in use',
+                    'error' => 'duplicate_email'
+                ], 422);
+            }
+            
+            return response()->json([
+                'message' => 'Database error while creating staff account',
+                'error' => 'database_error'
+            ], 500);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating staff account: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to create staff account',
+                'error' => 'server_error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Display the specified staff member.
+     */
+    public function show(Request $request, Staff $staff)
+    {
+        // Check if user has staff management permission
+        $permissionCheck = $this->checkModulePermission($request, 'staffManagement', 'staff management');
+        if ($permissionCheck) {
+            return $permissionCheck;
+        }
+
+        return response()->json($staff);
+    }
+
+    /**
+     * Update the specified staff member.
+     */
+    public function update(Request $request, Staff $staff)
+    {
+        // Check if user has staff management permission
+        $permissionCheck = $this->checkModulePermission($request, 'staffManagement', 'staff management');
+        if ($permissionCheck) {
+            return $permissionCheck;
+        }
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'string', 'email', 'max:255', 'unique:staff,email,' . $staff->id],
+            'department' => ['sometimes', 'string', 'max:255'],
+            'contact_number' => ['sometimes', 'string', 'max:255'],
+            'role' => ['sometimes', 'string', 'in:staff,admin']
+        ]);
+
+        $oldValues = $staff->getOriginal();
+        $staff->update($validated);
+        
+        // Log staff update
+        $user = Auth::user();
+        if ($user) {
+            ActivityLogService::logUpdated($staff, $oldValues, $request);
+        }
+
+        return response()->json([
+            'message' => 'Staff account updated successfully',
+            'staff' => $staff
+        ]);
+    }
+
+    /**
+     * Deactivate the specified staff member.
+     */
+    public function deactivate(Request $request, Staff $staff)
+    {
+        // Check if user has staff management permission
+        $permissionCheck = $this->checkModulePermission($request, 'staffManagement', 'staff management');
+        if ($permissionCheck) {
+            return $permissionCheck;
+        }
+
+        $staff->update(['active' => false]);
+
+        return response()->json([
+            'message' => 'Staff account deactivated successfully',
+            'staff' => $staff
+        ]);
+    }
+
+    /**
+     * Reactivate the specified staff member.
+     */
+    public function reactivate(Staff $staff)
+    {
+        $staff->update(['active' => true]);
+
+        return response()->json([
+            'message' => 'Staff account reactivated successfully',
+            'staff' => $staff
+        ]);
+    }
+
+    /**
+     * Update module permissions for a staff member.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateModulePermissions(Request $request, $id)
+    {
+        // Check if user has staff management permission
+        $permissionCheck = $this->checkModulePermission($request, 'staffManagement', 'staff management');
+        if ($permissionCheck) {
+            return $permissionCheck;
+        }
+
+        try {
+            DB::beginTransaction();
+            
+            // Find the staff member
+            $staff = Staff::findOrFail($id);
+            
+            // Validate the request data
+            $validated = $request->validate([
+                'module_permissions' => ['required', 'array'],
+                'module_permissions.*' => ['boolean'],
+                'staff_id' => ['required', 'integer', 'exists:staff,id']
+            ]);
+
+            // Log the update request
+            Log::info('Received permissions update request', [
+                'staff_id' => $id,
+                'permissions' => $request->module_permissions
+            ]);
+
+            // The frontend already sends permissions in the correct backend format
+            // No additional mapping needed - just use the permissions directly
+            $incomingPermissions = $request->module_permissions;
+            
+            // Define all expected permission keys with default false values
+            $defaultPermissions = [
+                'dashboard' => false,
+                'residentsRecords' => false,
+                'documentsRecords' => false,
+                'householdRecords' => false,
+                'blotterRecords' => false,
+                'financialTracking' => false,
+                'barangayOfficials' => false,
+                'staffManagement' => false,
+                'communicationAnnouncement' => false,
+                'socialServices' => false,
+                'disasterEmergency' => false,
+                'projectManagement' => false,
+                'inventoryAssets' => false,
+                'activityLogs' => false
+            ];
+            
+            // Merge incoming permissions with defaults to ensure all keys are present
+            $finalPermissions = array_merge($defaultPermissions, $incomingPermissions);
+            
+            // Update the staff permissions
+            $staff->module_permissions = $finalPermissions;
+            
+            // Log the permissions being saved
+            Log::info('Saving staff permissions', [
+                'staff_id' => $staff->id,
+                'original_permissions' => $request->module_permissions,
+                'final_permissions' => $finalPermissions
+            ]);
+            
+            $staff->save();
+
+            DB::commit();
+
+            // Return success response
+            return response()->json([
+                'message' => 'Permissions updated successfully',
+                'staff' => $staff
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            Log::error('Validation error updating permissions: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->validator->errors()->all()
+            ], 422);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            Log::error('Staff not found: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Staff member not found'
+            ], 404);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating permissions: ' . $e->getMessage(), [
+                'exception' => $e,
+                'staff_id' => $id
+            ]);
+            return response()->json([
+                'message' => 'An error occurred while updating permissions'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get current staff member's profile
+     */
+    public function myProfile(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            $staff = Staff::where('user_id', $user->id)->first();
+            
+            if (!$staff) {
+                return response()->json([
+                    'message' => 'Staff profile not found. Please complete your profile first.'
+                ], 404);
+            }
+            
+            $profile = $staff->profile;
+            
+            return response()->json([
+                'staff' => $staff,
+                'profile' => $profile,
+                'profile_completed' => $profile ? $profile->profile_completed : false
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching staff profile: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to fetch staff profile'
+            ], 500);
+        }
+    }
+
+    /**
+     * Create or update staff profile
+     */
+    public function updateProfile(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            $staff = Staff::where('user_id', $user->id)->first();
+            
+            if (!$staff) {
+                return response()->json([
+                    'message' => 'Staff record not found'
+                ], 404);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'first_name' => 'nullable|string|max:255',
+                'middle_name' => 'nullable|string|max:255',
+                'last_name' => 'nullable|string|max:255',
+                'name_suffix' => 'nullable|string|max:255',
+                'birth_date' => 'nullable|date',
+                'birth_place' => 'nullable|string|max:255',
+                'age' => 'nullable|integer|min:1|max:120',
+                'nationality' => 'nullable|string|max:255',
+                'sex' => 'nullable|string|in:Male,Female',
+                'civil_status' => 'nullable|string|in:Single,Married,Widowed,Divorced,Separated',
+                'religion' => 'nullable|string|max:255',
+                'email' => 'required|email|max:255',
+                'mobile_number' => 'nullable|string|max:20',
+                'landline_number' => 'nullable|string|max:20',
+                'current_address' => 'nullable|string',
+                'current_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+                'department' => 'nullable|string|max:255',
+                'position' => 'nullable|string|max:255',
+                'employee_id' => 'nullable|string|max:255',
+                'hire_date' => 'nullable|date',
+                'employment_status' => 'nullable|string|in:active,inactive,terminated,on_leave',
+                'educational_attainment' => 'nullable|string|max:255',
+                'work_experience' => 'nullable|string',
+                'emergency_contact_name' => 'nullable|string|max:255',
+                'emergency_contact_number' => 'nullable|string|max:20',
+                'emergency_contact_relationship' => 'nullable|string|max:255',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $data = $validator->validated();
+
+            // Handle photo upload
+            if ($request->hasFile('current_photo')) {
+                $photo = $request->file('current_photo');
+                $photoName = time() . '_' . $photo->getClientOriginalName();
+                $photoPath = $photo->storeAs('staff-photos', $photoName, 'public');
+                $data['current_photo'] = $photoPath;
+            }
+
+            // Check if profile exists
+            $profile = $staff->profile;
+            
+            if ($profile) {
+                // Update existing profile
+                $profile->update($data);
+                $profile->profile_completed = true;
+                $profile->save();
+            } else {
+                // Create new profile
+                $data['user_id'] = $user->id;
+                $data['staff_id'] = $staff->id;
+                $data['profile_completed'] = true;
+                
+                $profile = StaffProfile::create($data);
+            }
+
+            // Update staff record with basic info (only update fields that are provided)
+            $staffUpdateData = [];
+            
+            // Build full name if name parts are provided
+            if (!empty($data['first_name']) || !empty($data['last_name'])) {
+                $nameParts = array_filter([
+                    $data['first_name'] ?? '',
+                    $data['middle_name'] ?? '',
+                    $data['last_name'] ?? ''
+                ]);
+                $staffUpdateData['name'] = implode(' ', $nameParts);
+            }
+            
+            if (isset($data['email'])) $staffUpdateData['email'] = $data['email'];
+            if (isset($data['department'])) $staffUpdateData['department'] = $data['department'];
+            if (isset($data['position'])) $staffUpdateData['position'] = $data['position'];
+            if (isset($data['mobile_number'])) $staffUpdateData['contact_number'] = $data['mobile_number'];
+            if (isset($data['birth_date'])) $staffUpdateData['birthdate'] = $data['birth_date'];
+            if (isset($data['sex'])) $staffUpdateData['gender'] = $data['sex'];
+            if (isset($data['civil_status'])) $staffUpdateData['civil_status'] = $data['civil_status'];
+            if (isset($data['current_address'])) $staffUpdateData['address'] = $data['current_address'];
+            
+            if (!empty($staffUpdateData)) {
+                $staff->update($staffUpdateData);
+            }
+
+            return response()->json([
+                'message' => 'Staff profile updated successfully',
+                'staff' => $staff->fresh(),
+                'profile' => $profile->fresh()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error updating staff profile: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update staff profile'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get staff profile completion status
+     */
+    public function profileStatus(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            $staff = Staff::where('user_id', $user->id)->first();
+            
+            if (!$staff) {
+                return response()->json([
+                    'isComplete' => false,
+                    'message' => 'Staff record not found'
+                ]);
+            }
+            
+            $profile = $staff->profile;
+            
+            return response()->json([
+                'isComplete' => $profile ? $profile->profile_completed : false,
+                'has_profile' => $profile ? true : false,
+                'message' => $profile ? 'Profile found' : 'No profile found'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error checking staff profile status: ' . $e->getMessage());
+            return response()->json([
+                'isComplete' => false,
+                'message' => 'Failed to check profile status'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get dashboard statistics for staff
+     */
+    public function dashboard(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            // Get staff record
+            $staff = Staff::where('user_id', $user->id)->first();
+            
+            if (!$staff) {
+                return response()->json([
+                    'message' => 'Staff record not found'
+                ], 404);
+            }
+
+            // Get statistics based on staff permissions
+            $permissions = $staff->module_permissions ?? [];
+            $statistics = [
+                'total_residents' => 0,
+                'certificates_issued' => 0,
+                'pending_requests' => 0,
+                'household_records' => 0,
+                'blotter_reports' => 0,
+                'barangay_officials' => 0,
+                'barangay_staff' => 0,
+            ];
+
+            // Check if staff has residents permission
+            if (isset($permissions['residentsRecords']) && $permissions['residentsRecords']) {
+                $statistics['total_residents'] = \App\Models\Resident::count();
+                $statistics['household_records'] = \App\Models\Household::count();
+            }
+
+            // Check if staff has documents permission
+            if (isset($permissions['documentsRecords']) && $permissions['documentsRecords']) {
+                $statistics['certificates_issued'] = \App\Models\DocumentRequest::where('status', 'completed')->count();
+                $statistics['pending_requests'] = \App\Models\DocumentRequest::where('status', 'pending')->count();
+            }
+
+            // Check if staff has blotter permission
+            if (isset($permissions['blotterRecords']) && $permissions['blotterRecords']) {
+                $statistics['blotter_reports'] = \App\Models\BlotterRecord::count();
+            }
+
+            // Check if staff has officials permission
+            if (isset($permissions['barangayOfficials']) && $permissions['barangayOfficials']) {
+                $statistics['barangay_officials'] = \App\Models\BarangayMember::count();
+            }
+
+            // Check if staff has staff management permission
+            if (isset($permissions['staffManagement']) && $permissions['staffManagement']) {
+                $statistics['barangay_staff'] = Staff::where('active', true)->count();
+            }
+
+            return response()->json([
+                'statistics' => $statistics,
+                'staff_info' => [
+                    'name' => $staff->name,
+                    'department' => $staff->department,
+                    'position' => $staff->position,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching staff dashboard statistics: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to fetch dashboard statistics'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get residents list for staff
+     */
+    public function residentsList(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            // Debug logging
+            Log::info('StaffController@residentsList - User ID: ' . $user->id);
+            
+            // Get staff record
+            $staff = Staff::where('user_id', $user->id)->first();
+            
+            if (!$staff) {
+                Log::warning('StaffController@residentsList - Staff record not found for user ID: ' . $user->id);
+                return response()->json([
+                    'message' => 'Staff record not found'
+                ], 404);
+            }
+
+            // Debug logging
+            Log::info('StaffController@residentsList - Staff found: ' . $staff->id);
+            Log::info('StaffController@residentsList - Staff module_permissions: ' . json_encode($staff->module_permissions));
+
+            // Check if staff has residents permission
+            $permissions = $staff->module_permissions ?? [];
+            if (!isset($permissions['residentsRecords']) || !$permissions['residentsRecords']) {
+                Log::warning('StaffController@residentsList - No residents permission. Permissions: ' . json_encode($permissions));
+                return response()->json([
+                    'message' => 'You do not have permission to access residents data',
+                    'debug' => [
+                        'permissions' => $permissions,
+                        'has_residentsRecords_key' => isset($permissions['residentsRecords']),
+                        'residentsRecords_value' => $permissions['residentsRecords'] ?? 'not_set'
+                    ]
+                ], 403);
+            }
+
+            // Get residents data (same as admin endpoint but with staff permission check)
+            $residents = \App\Models\Resident::with(['profile', 'user'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            Log::info('StaffController@residentsList - Residents query successful', [
+                'count' => $residents->count()
+            ]);
+
+            $response = [
+                'residents' => $residents,
+                'message' => 'Residents data retrieved successfully'
+            ];
+
+            Log::info('StaffController@residentsList - Response prepared', [
+                'response_keys' => array_keys($response),
+                'residents_count' => count($response['residents']),
+                'first_resident_keys' => $residents->first() ? array_keys($residents->first()->toArray()) : 'no_residents'
+            ]);
+
+            return response()->json($response);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching residents list for staff: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to fetch residents data'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get document requests for staff
+     */
+    public function documentRequests(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            // Debug logging
+            Log::info('StaffController@documentRequests - User ID: ' . $user->id);
+            
+            // Get staff record
+            $staff = Staff::where('user_id', $user->id)->first();
+            
+            if (!$staff) {
+                Log::warning('StaffController@documentRequests - Staff record not found for user ID: ' . $user->id);
+                return response()->json([
+                    'message' => 'Staff record not found'
+                ], 404);
+            }
+
+            // Debug logging
+            Log::info('StaffController@documentRequests - Staff found: ' . $staff->id);
+            Log::info('StaffController@documentRequests - Staff module_permissions: ' . json_encode($staff->module_permissions));
+
+            // Check if staff has documents permission - but allow access if no permissions are set (fallback for existing staff)
+            $permissions = $staff->module_permissions ?? [];
+            $hasDocumentsPermission = isset($permissions['documentsRecords']) && $permissions['documentsRecords'];
+            $hasNoPermissionsSet = empty($permissions) || count(array_filter($permissions)) === 0;
+            
+            if (!$hasDocumentsPermission && !$hasNoPermissionsSet) {
+                Log::warning('StaffController@documentRequests - No documents permission. Permissions: ' . json_encode($permissions));
+                return response()->json([
+                    'message' => 'You do not have permission to access document requests data',
+                    'debug' => [
+                        'permissions' => $permissions,
+                        'has_documentsRecords_key' => isset($permissions['documentsRecords']),
+                        'documentsRecords_value' => $permissions['documentsRecords'] ?? 'not_set'
+                    ]
+                ], 403);
+            }
+
+            // Get document requests data (same as admin endpoint but with staff permission check)
+            $requests = \App\Models\DocumentRequest::with(['user:id,email'])
+                ->select([
+                    'id', 'user_id', 'document_type', 'certification_type', 'fields', 
+                    'certification_data', 'status', 'processing_notes', 'priority',
+                    'estimated_completion', 'completed_at', 'attachment', 'pdf_path',
+                    'payment_amount', 'payment_status', 'payment_notes', 'created_at', 'updated_at'
+                ])
+                ->orderBy('created_at', 'desc')
+                ->get();
+            
+            // Manually load residents to avoid complex joins
+            $userIds = $requests->pluck('user_id')->unique();
+            $residents = \App\Models\Resident::whereIn('user_id', $userIds)
+                ->select(['id', 'user_id', 'first_name', 'last_name', 'email'])
+                ->get()
+                ->keyBy('user_id');
+            
+            // Attach residents to requests
+            $requests->each(function ($request) use ($residents) {
+                $request->resident = $residents->get($request->user_id);
+            });
+            
+            Log::info('StaffController@documentRequests - Successfully fetched ' . $requests->count() . ' document requests');
+            
+            return response()->json($requests);
+            
+        } catch (\Exception $e) {
+            Log::error('Error fetching document requests for staff: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to fetch document requests data'
+            ], 500);
+        }
+    }
+}

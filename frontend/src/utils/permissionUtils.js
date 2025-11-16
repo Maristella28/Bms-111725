@@ -1,0 +1,183 @@
+/**
+ * Permission utility functions for staff access control
+ */
+
+/**
+ * Check if a staff member has access to a specific module
+ * @param {Object} staffPermissions - Staff member's permissions object
+ * @param {string} moduleKey - Module key to check (e.g., 'documents', 'residents')
+ * @returns {boolean} - Whether the staff member has access to the module
+ */
+export const hasModuleAccess = (staffPermissions, moduleKey) => {
+  if (!staffPermissions || !moduleKey) return false;
+  
+  const modulePermission = staffPermissions[moduleKey];
+  
+  // Handle new permission structure with access property
+  if (typeof modulePermission === 'object' && modulePermission !== null) {
+    return Boolean(modulePermission.access);
+  }
+  
+  // Handle legacy boolean format
+  return Boolean(modulePermission);
+};
+
+/**
+ * Check if a staff member has access to a specific sub-module/section
+ * @param {Object} staffPermissions - Staff member's permissions object
+ * @param {string} moduleKey - Module key (e.g., 'documents', 'residents')
+ * @param {string} subModuleKey - Sub-module key (e.g., 'document_requests', 'verification')
+ * @returns {boolean} - Whether the staff member has access to the sub-module
+ */
+export const hasSubModuleAccess = (staffPermissions, moduleKey, subModuleKey) => {
+  if (!staffPermissions || !moduleKey || !subModuleKey) return false;
+  
+  const modulePermission = staffPermissions[moduleKey];
+  
+  // Handle new permission structure with sub_permissions
+  if (typeof modulePermission === 'object' && modulePermission !== null && modulePermission.sub_permissions) {
+    return Boolean(modulePermission.sub_permissions[subModuleKey]);
+  }
+  
+  // If no sub-permissions structure, check if module access is granted
+  return hasModuleAccess(staffPermissions, moduleKey);
+};
+
+/**
+ * Get filtered navigation items based on staff permissions
+ * @param {Array} navigationItems - Array of navigation items with permissions
+ * @param {Object} staffPermissions - Staff member's permissions object
+ * @returns {Array} - Filtered navigation items that the staff member can access
+ */
+export const getFilteredNavigationItems = (navigationItems, staffPermissions) => {
+  if (!navigationItems || !staffPermissions) return [];
+  
+  return navigationItems.filter(item => {
+    // Check if staff has access to the main module
+    if (item.moduleKey && !hasModuleAccess(staffPermissions, item.moduleKey)) {
+      return false;
+    }
+    
+    // Check if staff has access to specific sub-modules
+    if (item.subItems && item.subItems.length > 0) {
+      item.subItems = item.subItems.filter(subItem => {
+        if (subItem.moduleKey && subItem.subModuleKey) {
+          return hasSubModuleAccess(staffPermissions, subItem.moduleKey, subItem.subModuleKey);
+        }
+        return true;
+      });
+      
+      // Only show parent item if it has accessible sub-items or if it's accessible itself
+      return item.subItems.length > 0 || hasModuleAccess(staffPermissions, item.moduleKey);
+    }
+    
+    return true;
+  });
+};
+
+/**
+ * Check if a staff member can perform a specific action
+ * @param {Object} staffPermissions - Staff member's permissions object
+ * @param {string} action - Action to check (e.g., 'view', 'edit', 'delete')
+ * @param {string} moduleKey - Module key
+ * @param {string} subModuleKey - Optional sub-module key
+ * @returns {boolean} - Whether the staff member can perform the action
+ */
+export const canPerformAction = (staffPermissions, action, moduleKey, subModuleKey = null) => {
+  if (!staffPermissions || !action || !moduleKey) return false;
+  
+  // For now, we'll use module/sub-module access as the basis for actions
+  // This can be extended later to include specific action permissions
+  
+  if (subModuleKey) {
+    return hasSubModuleAccess(staffPermissions, moduleKey, subModuleKey);
+  }
+  
+  return hasModuleAccess(staffPermissions, moduleKey);
+};
+
+/**
+ * Get permission summary for display purposes
+ * @param {Object} staffPermissions - Staff member's permissions object
+ * @returns {Object} - Summary of granted permissions
+ */
+export const getPermissionSummary = (staffPermissions) => {
+  if (!staffPermissions) return { modules: 0, subModules: 0, total: 0 };
+  
+  let modules = 0;
+  let subModules = 0;
+  
+  Object.entries(staffPermissions).forEach(([moduleKey, modulePermission]) => {
+    if (typeof modulePermission === 'object' && modulePermission !== null) {
+      if (modulePermission.access) {
+        modules++;
+        
+        if (modulePermission.sub_permissions) {
+          Object.values(modulePermission.sub_permissions).forEach(subPermission => {
+            if (subPermission) subModules++;
+          });
+        }
+      }
+    } else if (modulePermission) {
+      modules++;
+    }
+  });
+  
+  return {
+    modules,
+    subModules,
+    total: modules + subModules
+  };
+};
+
+/**
+ * Permission constants for consistent usage across the application
+ */
+export const PERMISSION_MODULES = {
+  DASHBOARD: 'dashboard',
+  RESIDENTS: 'residents',
+  DOCUMENTS: 'documents',
+  HOUSEHOLD: 'household',
+  BLOTTER: 'blotter',
+  TREASURER: 'treasurer',
+  OFFICIALS: 'officials',
+  STAFF: 'staff',
+  COMMUNICATION: 'communication',
+  SOCIAL_SERVICES: 'social_services',
+  COMMAND_CENTER: 'command_center',
+  PROJECTS: 'projects',
+  INVENTORY: 'inventory',
+  LOGS: 'logs'
+};
+
+export const PERMISSION_SUB_MODULES = {
+  // Residents sub-modules
+  RESIDENTS_MAIN_RECORDS: 'main_records',
+  RESIDENTS_VERIFICATION: 'verification',
+  RESIDENTS_DISABLED: 'disabled_residents',
+  
+  // Documents sub-modules
+  DOCUMENTS_REQUESTS: 'document_requests',
+  DOCUMENTS_RECORDS: 'document_records',
+  
+  // Social Services sub-modules
+  SOCIAL_SERVICES_PROGRAMS: 'programs',
+  SOCIAL_SERVICES_BENEFICIARIES: 'beneficiaries',
+  
+  // Command Center sub-modules
+  COMMAND_CENTER_DISASTER_RECORDS: 'disaster_records',
+  COMMAND_CENTER_EMERGENCY_HOTLINES: 'emergency_hotlines',
+  
+  // Inventory sub-modules
+  INVENTORY_ASSET_MANAGEMENT: 'asset_management',
+  INVENTORY_ASSET_REQUESTS: 'asset_requests'
+};
+
+export const PERMISSION_ACTIONS = {
+  VIEW: 'view',
+  CREATE: 'create',
+  EDIT: 'edit',
+  DELETE: 'delete',
+  APPROVE: 'approve',
+  REJECT: 'reject'
+};

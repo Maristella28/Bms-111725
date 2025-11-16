@@ -1,0 +1,1287 @@
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { CheckCircle, XCircle, X } from 'lucide-react';
+import axiosInstance from '../../utils/axiosConfig';
+import { useAuth } from '../../contexts/AuthContext';
+import { DocumentUpload, VerificationPending } from '../verification-pages';
+
+// ImageFallback component moved to individual verification components
+
+// Enhanced Step Tracker Component - Perfect Placement and Design
+const StepTracker = ({ currentStep = 1 }) => {
+  return (
+    <div className="w-full max-w-5xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-center relative">
+        {/* Progress Line - Behind circles */}
+        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-300 -translate-y-1/2"></div>
+        
+        {/* Step 1: Upload Document */}
+        <div className="flex flex-col items-center relative z-10 bg-white px-3">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+            currentStep >= 1 
+              ? 'bg-blue-500 text-white shadow-lg' 
+              : 'bg-white border-2 border-gray-300 text-gray-500 shadow-sm'
+          }`}>
+            {currentStep > 1 ? (
+              <CheckCircle className="w-6 h-6 text-white" />
+            ) : (
+              <span className="text-base font-bold">1</span>
+            )}
+          </div>
+          <span className={`mt-3 text-sm font-medium text-center whitespace-nowrap ${
+            currentStep >= 1 ? 'text-blue-600 font-semibold' : 'text-gray-500'
+          }`}>
+            Upload Document
+          </span>
+        </div>
+        
+        {/* Step 2: Document Under Review */}
+        <div className="flex flex-col items-center relative z-10 bg-white px-3">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+            currentStep >= 2 
+              ? 'bg-blue-500 text-white shadow-lg' 
+              : 'bg-white border-2 border-gray-300 text-gray-500 shadow-sm'
+          }`}>
+            {currentStep > 2 ? (
+              <CheckCircle className="w-6 h-6 text-white" />
+            ) : (
+              <span className="text-base font-bold">2</span>
+            )}
+          </div>
+          <span className={`mt-3 text-sm font-medium text-center whitespace-nowrap ${
+            currentStep >= 2 ? 'text-blue-600 font-semibold' : 'text-gray-500'
+          }`}>
+            Document Under Review
+          </span>
+        </div>
+        
+        {/* Step 3: Edit Profile */}
+        <div className="flex flex-col items-center relative z-10 bg-white px-3">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+            currentStep >= 3 
+              ? 'bg-blue-500 text-white shadow-lg' 
+              : 'bg-white border-2 border-gray-300 text-gray-500 shadow-sm'
+          }`}>
+            {currentStep > 3 ? (
+              <CheckCircle className="w-6 h-6 text-white" />
+            ) : (
+              <span className="text-base font-bold">3</span>
+            )}
+          </div>
+          <span className={`mt-3 text-sm font-medium text-center whitespace-nowrap ${
+            currentStep >= 3 ? 'text-blue-600 font-semibold' : 'text-gray-500'
+          }`}>
+            Edit Profile
+          </span>
+        </div>
+        
+        {/* Step 4: Profile Completion */}
+        <div className="flex flex-col items-center relative z-10 bg-white px-3">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+            currentStep >= 4 
+              ? 'bg-blue-500 text-white shadow-lg' 
+              : 'bg-white border-2 border-gray-300 text-gray-500 shadow-sm'
+          }`}>
+            {currentStep > 4 ? (
+              <CheckCircle className="w-6 h-6 text-white" />
+            ) : (
+              <span className="text-base font-bold">4</span>
+            )}
+          </div>
+          <span className={`mt-3 text-sm font-medium text-center whitespace-nowrap ${
+            currentStep >= 4 ? 'text-blue-600 font-semibold' : 'text-gray-500'
+          }`}>
+            Profile Completion
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Professional Loading Component
+const LoadingState = () => {
+  return (
+    <div className="space-y-8">
+      <StepTracker currentStep={1} />
+      <div className="w-full bg-gradient-to-br from-gray-50 via-slate-50 to-zinc-50 rounded-2xl flex flex-col items-center py-16 shadow-xl border border-gray-200 relative overflow-hidden">
+        {/* Background decorative elements */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-20 w-32 h-32 bg-gray-300 rounded-full blur-2xl"></div>
+          <div className="absolute bottom-20 right-20 w-40 h-40 bg-slate-300 rounded-full blur-2xl"></div>
+        </div>
+        
+        {/* Loading Content */}
+        <div className="relative z-10 flex flex-col items-center text-center">
+          <div className="relative mb-8">
+            <div className="w-24 h-24 bg-gradient-to-br from-gray-500 to-slate-600 rounded-full flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full border-3 border-white flex items-center justify-center shadow-md animate-pulse">
+              <span className="text-white text-sm font-bold">⏳</span>
+            </div>
+          </div>
+          
+          <div className="max-w-2xl">
+            <h3 className="text-4xl font-bold text-gray-800 mb-4 bg-gradient-to-r from-gray-800 to-slate-600 bg-clip-text text-transparent">
+              Loading Verification Status
+            </h3>
+            <p className="text-gray-600 text-xl font-semibold mb-6">
+              Please wait while we check your verification status...
+            </p>
+            <p className="text-lg text-gray-700 leading-relaxed">
+              We're retrieving your residency verification information to show you the correct status.
+            </p>
+          </div>
+          
+          {/* Loading Animation */}
+          <div className="mt-8 flex items-center gap-2">
+            <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-bounce"></div>
+            <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+            <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Beautiful Modal Component
+const Modal = ({ isOpen, onClose, type, title, message, icon: Icon, showProfileButton = false, onProfileClick }) => {
+  if (!isOpen) return null;
+
+  const getModalStyles = () => {
+    switch (type) {
+      case 'success':
+        return {
+          bg: 'from-green-500 to-emerald-600',
+          iconBg: 'bg-green-100',
+          iconColor: 'text-green-600',
+          buttonBg: 'from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+        };
+      case 'error':
+        return {
+          bg: 'from-red-500 to-rose-600',
+          iconBg: 'bg-red-100',
+          iconColor: 'text-red-600',
+          buttonBg: 'from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700'
+        };
+      case 'warning':
+        return {
+          bg: 'from-orange-500 to-amber-600',
+          iconBg: 'bg-orange-100',
+          iconColor: 'text-orange-600',
+          buttonBg: 'from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700'
+        };
+      case 'info':
+        return {
+          bg: 'from-blue-500 to-indigo-600',
+          iconBg: 'bg-blue-100',
+          iconColor: 'text-blue-600',
+          buttonBg: 'from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700'
+        };
+      default:
+        return {
+          bg: 'from-gray-500 to-gray-600',
+          iconBg: 'bg-gray-100',
+          iconColor: 'text-gray-600',
+          buttonBg: 'from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700'
+        };
+    }
+  };
+
+  const styles = getModalStyles();
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
+        <div className={`bg-gradient-to-r ${styles.bg} rounded-t-2xl p-6`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 ${styles.iconBg} rounded-xl flex items-center justify-center`}>
+                <Icon className={`w-6 h-6 ${styles.iconColor}`} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">{title}</h2>
+                <p className="text-white/90 text-sm">Residency Verification</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:text-red-200 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-300 rounded-full p-1"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-6">
+          <p className="text-gray-700 text-base leading-relaxed mb-6">
+            {message}
+          </p>
+          
+          <div className="flex justify-between items-center">
+            <div className="flex gap-3">
+              {showProfileButton && (
+                <button
+                  onClick={onProfileClick}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center gap-2"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Edit Profile
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className={`bg-gradient-to-r ${styles.buttonBg} text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 transform hover:scale-105`}
+              >
+                {type === 'success' && title === 'Verification Approved!' ? 'Continue' : 'Got it'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ResidencyVerification = ({ form = {}, profileData: propProfileData, onImageUpload, isFirstTime = false } = {}) => {
+  const { user } = useAuth();
+  
+  console.log('ResidencyVerification: Component rendering with props:', { 
+    hasForm: !!form, 
+    hasProfileData: !!propProfileData,
+    hasOnImageUpload: !!onImageUpload,
+    onImageUploadType: typeof onImageUpload
+  });
+  
+  // Get profile data from props first, fallback to AuthContext user object
+  const profileData = propProfileData || user?.profile || {};
+  
+  
+
+  // Upload state moved to DocumentUpload component
+  
+  // Initialize local state with form data or profile data if available
+  const [uploadedImagePath, setUploadedImagePath] = useState(() => {
+    const initialPath = form.residency_verification_image || profileData.residency_verification_image || user?.profile?.residency_verification_image || null;
+    return initialPath;
+  });
+  const [overrideStatus, setOverrideStatus] = useState(() => {
+    const initialStatus = form.verification_status || profileData.verification_status || user?.profile?.verification_status || null;
+    return initialStatus;
+  });
+  
+  // Use ref to persist approved/denied status - prevents props from resetting it
+  // Initialize with approved/denied if already in props, otherwise null
+  const getInitialFinalStatus = () => {
+    const initialStatus = form.verification_status || profileData.verification_status || user?.profile?.verification_status || null;
+    if (initialStatus === 'approved' || initialStatus === 'denied') {
+      console.log('ResidencyVerification: Initializing finalStatusRef with:', initialStatus);
+      return initialStatus;
+    }
+    return null;
+  };
+  const finalStatusRef = useRef(getInitialFinalStatus());
+  
+  // Initialize loading state - show loading until we have meaningful data
+  const [isLoading, setIsLoading] = useState(() => {
+    // Always start with loading - we need to wait for data to be available
+    return true;
+  });
+  const [dataLoaded, setDataLoaded] = useState(() => {
+    // Start with false - data needs to be loaded
+    return false;
+  });
+  const [imageLoadError, setImageLoadError] = useState(false);
+  
+  // Modal state
+  const [modal, setModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    icon: CheckCircle,
+    showProfileButton: false
+  });
+  
+  // Track previous status to detect changes
+  const [previousStatus, setPreviousStatus] = useState(null);
+  const [hasShownApprovalModal, setHasShownApprovalModal] = useState(false);
+
+  // Modal auto-close functionality removed - user must manually close the modal
+
+  // Prevent showing approval modal if already approved on component load
+  useEffect(() => {
+    const effectiveStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status;
+    if (effectiveStatus === 'approved' && modal.isOpen && modal.title === 'Verification Approved!') {
+      closeModal();
+    }
+  }, [overrideStatus, form.verification_status, profileData.verification_status, modal.isOpen, modal.title]);
+
+  // Helper function to show modal
+  const showModal = (type, title, message, icon = CheckCircle) => {
+    setModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      icon
+    });
+  };
+
+  const closeModal = () => {
+    console.log('ResidencyVerification: Closing modal');
+    setModal(prev => ({ ...prev, isOpen: false }));
+    
+    // Force a re-render to ensure step calculation updates
+    setTimeout(() => {
+      console.log('ResidencyVerification: Forcing re-render after modal close');
+      setForceUpdate(prev => prev + 1);
+    }, 100);
+  };
+
+  // Handle profile navigation
+  const handleProfileClick = () => {
+    closeModal();
+    // Navigate to profile page
+    window.location.href = '/residents/profile';
+  };
+
+  // Function to handle denied verification state
+  const handleDeniedVerification = useCallback(() => {
+    // Clear the uploaded image path
+    setUploadedImagePath(null);
+    
+    // Set status to denied
+    setOverrideStatus('denied');
+    
+    // Reset image load error state
+    setImageLoadError(false);
+    
+    // Show denial modal if we have a reason
+    const denialReason = form.denial_reason || profileData.denial_reason;
+    if (denialReason) {
+      showModal('error', 'Verification Denied', `Your residency verification was denied. Reason: ${denialReason}`, XCircle);
+    }
+  }, [form.denial_reason, profileData.denial_reason, form.residency_verification_image, profileData.residency_verification_image, showModal]);
+
+  // Handle form data changes and state restoration
+  useEffect(() => {
+    const hasFormData = Object.keys(form).length > 0;
+    const hasProfileData = Object.keys(profileData).length > 0;
+    
+    // Check if verification status is denied
+    const effectiveStatus = form.verification_status || profileData.verification_status;
+    if (effectiveStatus === 'denied') {
+      handleDeniedVerification();
+      // Reset approval modal state when denied
+      setHasShownApprovalModal(false);
+      return; // Don't proceed with normal sync if denied
+    }
+    
+    // If we receive form data or profile data, update loading state immediately
+    if (hasFormData || hasProfileData) {
+      // Always sync local state with form data or profile data to ensure consistency
+      const effectiveImagePath = form.residency_verification_image || profileData.residency_verification_image;
+      if (effectiveImagePath && effectiveImagePath !== uploadedImagePath) {
+        setUploadedImagePath(effectiveImagePath);
+        // Reset approval modal state when new image is uploaded
+        setHasShownApprovalModal(false);
+      }
+      
+      // Always sync verification status with form data or profile data
+      // CRITICAL: Never override finalStatusRef if it's already set
+      if (effectiveStatus && effectiveStatus !== overrideStatus && 
+          finalStatusRef.current !== 'approved' && finalStatusRef.current !== 'denied') {
+        setOverrideStatus(effectiveStatus);
+      }
+      
+      // Update loading state immediately if we have form data or profile data
+      if (isLoading) {
+        setIsLoading(false);
+        setDataLoaded(true);
+      }
+    }
+  }, [form, profileData, isLoading, dataLoaded, uploadedImagePath, overrideStatus, handleDeniedVerification]);
+
+  // Check for denied status on component mount and data changes
+  useEffect(() => {
+    const effectiveStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status;
+    if (effectiveStatus === 'denied') {
+      handleDeniedVerification();
+    }
+  }, [overrideStatus, form.verification_status, profileData.verification_status, handleDeniedVerification]);
+
+
+  // Fallback timeout to prevent infinite loading
+  useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        console.log('ResidencyVerification: Loading timeout reached, stopping loading state');
+        setIsLoading(false);
+        setDataLoaded(true);
+      }, 3000); // 3 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
+
+  // Effective values reflecting local upload success - prioritize database values
+  // Use finalStatusRef if set (approved/denied), otherwise use normal status chain
+  const status = finalStatusRef.current || (overrideStatus ?? form.verification_status ?? profileData.verification_status ?? user?.profile?.verification_status);
+  
+  // If status is denied, don't show any image (force new upload)
+  const getEffectiveImagePath = () => {
+    if (status === 'denied') {
+      return null;
+    }
+    
+    const path = uploadedImagePath ?? form.residency_verification_image ?? profileData.residency_verification_image;
+    return path;
+  };
+  
+  const imagePath = getEffectiveImagePath();
+
+  // Reset image load error when image path changes
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [imagePath]);
+
+  // Memoize data availability check to prevent unnecessary re-calculations
+  const dataAvailability = useMemo(() => {
+    const hasFormData = form && Object.keys(form).length > 0 && (form.verification_status !== null || form.residency_verification_image);
+    const hasProfileData = profileData && Object.keys(profileData).length > 0 && (profileData.verification_status !== null || profileData.residency_verification_image);
+    const hasUserProfileData = user?.profile && (user.profile.verification_status !== null || user.profile.residency_verification_image);
+    
+    return {
+      hasFormData,
+      hasProfileData,
+      hasUserProfileData,
+      hasAnyData: hasFormData || hasProfileData || hasUserProfileData
+    };
+  }, [form, profileData, user?.profile]);
+
+  // Monitor data availability and update loading state - only when data availability changes
+  useEffect(() => {
+    const { hasFormData, hasProfileData, hasUserProfileData, hasAnyData } = dataAvailability;
+    
+    // Only log and update if we're still loading and have data
+    if (isLoading && hasAnyData) {
+      console.log('ResidencyVerification: Data availability check:', {
+        hasFormData,
+        hasProfileData,
+        hasUserProfileData,
+        formKeys: form ? Object.keys(form).length : 0,
+        profileDataKeys: profileData ? Object.keys(profileData).length : 0,
+        userProfileKeys: user?.profile ? Object.keys(user.profile).length : 0,
+        formVerificationStatus: form?.verification_status,
+        formImage: form?.residency_verification_image,
+        profileVerificationStatus: profileData?.verification_status,
+        profileImage: profileData?.residency_verification_image,
+        userVerificationStatus: user?.profile?.verification_status,
+        userImage: user?.profile?.residency_verification_image,
+        isLoading
+      });
+      
+      console.log('ResidencyVerification: Found meaningful data, stopping loading');
+      setIsLoading(false);
+      setDataLoaded(true);
+    }
+  }, [dataAvailability, isLoading]); // Only depend on data availability and loading state
+
+  // Sync data from available sources - separate effect for data syncing
+  useEffect(() => {
+    const { hasFormData, hasProfileData, hasUserProfileData, hasAnyData } = dataAvailability;
+    
+    if (hasAnyData) {
+      // Helper function to check if we should update status (prevent downgrading from approved)
+      const shouldUpdateStatus = (newStatus, currentStatus) => {
+        if (!newStatus || newStatus === currentStatus) return false;
+        // CRITICAL: Never override finalStatusRef if it's already approved/denied
+        if (finalStatusRef.current === 'approved' || finalStatusRef.current === 'denied') {
+          return false;
+        }
+        // Don't override approved status with pending or denied
+        if (currentStatus === 'approved' && (newStatus === 'pending' || newStatus === 'denied')) return false;
+        return true;
+      };
+      
+      if (hasFormData) {
+        if (form.residency_verification_image && form.residency_verification_image !== imagePath) {
+          setUploadedImagePath(form.residency_verification_image);
+        }
+        if (shouldUpdateStatus(form.verification_status, overrideStatus)) {
+          setOverrideStatus(form.verification_status);
+        }
+      } else if (hasProfileData) {
+        if (profileData.residency_verification_image && profileData.residency_verification_image !== imagePath) {
+          setUploadedImagePath(profileData.residency_verification_image);
+        }
+        if (shouldUpdateStatus(profileData.verification_status, overrideStatus)) {
+          setOverrideStatus(profileData.verification_status);
+        }
+      } else if (hasUserProfileData) {
+        if (user.profile.residency_verification_image && user.profile.residency_verification_image !== imagePath) {
+          setUploadedImagePath(user.profile.residency_verification_image);
+        }
+        if (shouldUpdateStatus(user.profile.verification_status, overrideStatus)) {
+          setOverrideStatus(user.profile.verification_status);
+        }
+      }
+    }
+  }, [dataAvailability, imagePath, overrideStatus]); // Separate effect for syncing
+
+  // Check database on mount only if we don't have clear status from props/context
+  useEffect(() => {
+    const checkInitialStatus = async () => {
+      // Only check database if we don't have a clear status from props/context
+      const hasClearStatus = overrideStatus || form.verification_status || profileData.verification_status || user?.profile?.verification_status;
+      
+      if (!hasClearStatus && user) {
+        try {
+          const response = await axiosInstance.get('/profile');
+          const profile = response.data?.user?.profile || response.data?.profile || response.data;
+          
+          if (profile?.verification_status) {
+            setOverrideStatus(profile.verification_status);
+            
+            if (profile?.residency_verification_image) {
+              setUploadedImagePath(profile.residency_verification_image);
+            }
+            
+            if (onImageUpload) {
+              onImageUpload(profile);
+            }
+            
+            // If approved, force immediate UI update
+            if (profile.verification_status === 'approved') {
+              setDataLoaded(true);
+              setIsLoading(false);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking initial status:', error);
+        }
+      } else if (hasClearStatus) {
+        // If we have clear status, ensure loading state is correct
+        setIsLoading(false);
+        setDataLoaded(true);
+      }
+    };
+    
+    // Only run if we have user data
+    if (user) {
+      checkInitialStatus();
+    }
+  }, [user]); // Run when user data becomes available
+
+  // Handle case where we have pending status but no image - fetch from database
+  useEffect(() => {
+    const fetchMissingImage = async () => {
+      const effectiveStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status ?? user?.profile?.verification_status;
+      const hasImage = imagePath && imagePath !== null && imagePath !== '';
+      
+      // If we have pending status but no image, try to fetch it
+      if (effectiveStatus === 'pending' && !hasImage && user) {
+        console.log('ResidencyVerification: Pending status but no image, fetching from database');
+        try {
+          const response = await axiosInstance.get('/profile');
+          const profile = response.data?.user?.profile || response.data?.profile || response.data;
+          
+          if (profile?.residency_verification_image) {
+            console.log('ResidencyVerification: Found image in database:', profile.residency_verification_image);
+            setUploadedImagePath(profile.residency_verification_image);
+          }
+        } catch (error) {
+          console.error('Error fetching missing image:', error);
+        }
+      }
+    };
+    
+    fetchMissingImage();
+  }, [overrideStatus, form.verification_status, profileData.verification_status, user?.profile?.verification_status, imagePath, user]);
+
+  // Prevent component from resetting to Step 1 when data is available
+  // This is now handled by the main data availability useEffect above
+  // Keeping this as a safety net but without redundant state updates
+  useEffect(() => {
+    const hasAnyData = overrideStatus || form.verification_status || profileData.verification_status || user?.profile?.verification_status || imagePath;
+    
+    if (hasAnyData && isLoading) {
+      // Only update if we're still loading and have data
+      setIsLoading(false);
+      setDataLoaded(true);
+    }
+  }, [overrideStatus, form.verification_status, profileData.verification_status, user?.profile?.verification_status, imagePath, isLoading]);
+
+  // Sync with form/profile data changes - prioritize approved status
+  useEffect(() => {
+    // CRITICAL: Never override finalStatusRef if it's already set
+    if (finalStatusRef.current === 'approved' || finalStatusRef.current === 'denied') {
+      return;
+    }
+    
+    // Priority: Check for approved status first
+    if (form.verification_status === 'approved' || profileData.verification_status === 'approved') {
+      setOverrideStatus('approved');
+      
+      // Update image path if available
+      const approvedImage = form.residency_verification_image || profileData.residency_verification_image;
+      if (approvedImage) {
+        setUploadedImagePath(approvedImage);
+      }
+      
+      // Notify parent component
+      if (onImageUpload) {
+        const currentProfileData = form.verification_status === 'approved' ? form : profileData;
+        onImageUpload(currentProfileData);
+      }
+    } else if (form.verification_status && form.verification_status !== overrideStatus) {
+      setOverrideStatus(form.verification_status);
+    } else if (profileData.verification_status && profileData.verification_status !== overrideStatus) {
+      setOverrideStatus(profileData.verification_status);
+    }
+  }, [form.verification_status, profileData.verification_status, overrideStatus, onImageUpload]);
+
+  // Force sync when form data changes - additional safety net
+  useEffect(() => {
+    // CRITICAL: Never override finalStatusRef if it's already set
+    if (finalStatusRef.current === 'approved' || finalStatusRef.current === 'denied') {
+      // Still update image path though
+      if (form.residency_verification_image && form.residency_verification_image !== uploadedImagePath) {
+        setUploadedImagePath(form.residency_verification_image);
+      }
+      return;
+    }
+    
+    if (form.residency_verification_image && form.residency_verification_image !== uploadedImagePath) {
+      setUploadedImagePath(form.residency_verification_image);
+    }
+    if (form.verification_status && form.verification_status !== overrideStatus) {
+      setOverrideStatus(form.verification_status);
+    }
+  }, [form.residency_verification_image, form.verification_status, uploadedImagePath, overrideStatus]);
+
+  // Memoize the notification function to avoid dependency issues
+  const notifyParentOfApproval = useCallback(() => {
+    if (onImageUpload) {
+      onImageUpload({ 
+        verification_status: 'approved',
+        residency_verification_image: imagePath,
+        profile_completed: false // Ensure parent knows profile needs completion
+      });
+    }
+  }, [onImageUpload, imagePath]);
+
+  // Update loading state when status changes to approved
+  useEffect(() => {
+    const effectiveStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status;
+    if (effectiveStatus === 'approved') {
+      setDataLoaded(true);
+      setIsLoading(false);
+      
+      // Notify parent component of status change
+      notifyParentOfApproval();
+    }
+  }, [overrideStatus, form.verification_status, profileData.verification_status, notifyParentOfApproval]);
+
+  // Real-time status change detection and approval modal
+  useEffect(() => {
+    const effectiveStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status;
+    
+    // Check if status changed from non-approved to approved
+    if (effectiveStatus === 'approved' && 
+        previousStatus && 
+        previousStatus !== 'approved' && 
+        !hasShownApprovalModal) {
+      
+      // Show approval modal with profile button
+      setModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Verification Approved!',
+        message: 'Congratulations! Your residency verification has been approved by the barangay administrators. You can now complete your profile to access all resident services.',
+        icon: CheckCircle,
+        showProfileButton: true
+      });
+      
+      setHasShownApprovalModal(true);
+      
+      // Force immediate re-render to update step
+      setForceUpdate(prev => prev + 1);
+    }
+    
+    // Update previous status
+    setPreviousStatus(effectiveStatus);
+  }, [overrideStatus, form.verification_status, profileData.verification_status, previousStatus, hasShownApprovalModal]);
+  const [forceUpdate, setForceUpdate] = useState(0);
+  // pollingIndicator and isRefreshing moved to VerificationPending component
+
+  // Helper function to determine current step based on state
+  const getCurrentStep = () => {
+    // If still loading, return step 1 to show loading state
+    if (isLoading) {
+      return 1;
+    }
+    
+    // Use the corrected imagePath that already handles denied status
+    // Check ALL possible status sources - prioritize finalStatusRef (persisted)
+    const effectiveStatus = finalStatusRef.current || (overrideStatus ?? form.verification_status ?? profileData.verification_status ?? user?.profile?.verification_status);
+    const hasImage = imagePath && imagePath !== null && imagePath !== '';
+    
+    // PRIORITY: If status is denied, always return Step 1 regardless of image
+    if (effectiveStatus === 'denied') {
+      return 1; // Document denied, bounce back to step 1 (upload new)
+    }
+    
+    // PRIORITY: If status is approved, always return Step 3 regardless of image
+    if (effectiveStatus === 'approved' || effectiveStatus === 'Approved') {
+      return 3; // Document approved, can edit profile
+    }
+    
+    // Check if we have a valid image (regardless of status, unless denied/approved)
+    const hasValidImage = hasImage || 
+      (form.residency_verification_image && form.residency_verification_image !== '') ||
+      (profileData.residency_verification_image && profileData.residency_verification_image !== '') ||
+      (user?.profile?.residency_verification_image && user?.profile?.residency_verification_image !== '');
+    
+    // For Step 2: We need BOTH an image AND a pending status
+    // This ensures new accounts without uploaded documents don't jump to Step 2
+    const hasVerificationData = hasValidImage && effectiveStatus === 'pending';
+    
+    if (hasVerificationData) {
+      return 2; // Stay on Step 2 if we have verification data with pending status
+    }
+    
+    return 1; // No verification data at all
+  };
+
+  // Memoize the current step calculation to prevent unnecessary re-calculations
+  const currentStep = useMemo(() => {
+    return getCurrentStep();
+  }, [isLoading, overrideStatus, form.verification_status, profileData.verification_status, user?.profile?.verification_status, imagePath, form.residency_verification_image, profileData.residency_verification_image, user?.profile?.residency_verification_image, forceUpdate]);
+
+  // Debug step calculation changes - only logs when step actually changes
+  useEffect(() => {
+    const effectiveStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status ?? user?.profile?.verification_status;
+    const hasImage = imagePath && imagePath !== null && imagePath !== '';
+    
+    console.log('ResidencyVerification: Step calculation changed:', {
+      currentStep,
+      effectiveStatus,
+      effectiveStatusType: typeof effectiveStatus,
+      effectiveStatusLength: effectiveStatus?.length,
+      hasImage,
+      imagePath,
+      overrideStatus,
+      formVerificationStatus: form.verification_status,
+      profileVerificationStatus: profileData.verification_status,
+      userVerificationStatus: user?.profile?.verification_status,
+      formImage: form.residency_verification_image,
+      profileImage: profileData.residency_verification_image,
+      userImage: user?.profile?.residency_verification_image
+    });
+  }, [currentStep, overrideStatus, form.verification_status, profileData.verification_status, user?.profile?.verification_status, imagePath, form.residency_verification_image, profileData.residency_verification_image, user?.profile?.residency_verification_image]);
+
+
+
+  // Visual indicator for polling moved to VerificationPending component
+
+  // Memoize the polling notification function
+  const notifyParentOfPollingUpdate = useCallback((profile) => {
+    if (onImageUpload) {
+      onImageUpload(profile);
+    }
+  }, [onImageUpload]);
+
+  // handleManualRefresh function moved to VerificationPending component
+
+  // Enhanced real-time polling for status updates - ONLY poll if status is pending
+  useEffect(() => {
+    const currentStatus = overrideStatus ?? form.verification_status ?? profileData.verification_status ?? user?.profile?.verification_status;
+    
+    // STOP polling if status is approved or denied - no need to keep checking!
+    if (currentStatus === 'approved' || currentStatus === 'denied') {
+      console.log('ResidencyVerification: Status is final (' + currentStatus + '), stopping all polling');
+      return;
+    }
+    
+    // Only poll if we have an image and status is pending/unknown
+    if (imagePath && (currentStatus === 'pending' || !currentStatus)) {
+      console.log('ResidencyVerification: Starting real-time polling for status updates');
+      
+      const statusCheck = setInterval(async () => {
+        try {
+          // Try multiple endpoints to get the most up-to-date data
+          const [profileResponse, statusResponse] = await Promise.allSettled([
+            axiosInstance.get('/profile'),
+            axiosInstance.get('/profile-status')
+          ]);
+          
+          let profile = null;
+          let verificationStatus = null;
+          
+          // Get profile data
+          if (profileResponse.status === 'fulfilled') {
+            const profileData = profileResponse.value.data;
+            profile = profileData?.user?.profile || profileData?.profile || profileData;
+          }
+          
+          // Get status data
+          if (statusResponse.status === 'fulfilled') {
+            const statusData = statusResponse.value.data;
+            verificationStatus = statusData?.verification_status;
+          }
+          
+          // Use status from status endpoint if available, otherwise use profile data
+          const finalStatus = verificationStatus || profile?.verification_status;
+          
+          console.log('ResidencyVerification: Polling detected status:', finalStatus, 'type:', typeof finalStatus);
+          
+          // Check if status changed to approved or denied
+          if (finalStatus === 'approved' || finalStatus === 'Approved') {
+            console.log('ResidencyVerification: ✅ APPROVED! Updating UI and stopping polling');
+            
+            // PERSIST approved status in ref - prevents prop resets!
+            finalStatusRef.current = 'approved';
+            
+            // Update all states in batch
+            setOverrideStatus('approved');
+            if (profile?.residency_verification_image) {
+              setUploadedImagePath(profile.residency_verification_image);
+            }
+            setDataLoaded(true);
+            setIsLoading(false);
+            
+            // Notify parent
+            notifyParentOfPollingUpdate(profile || { verification_status: 'approved' });
+            
+            // Force re-render to show approved UI
+            setForceUpdate(prev => prev + 1);
+            
+          } else if (finalStatus === 'denied' || finalStatus === 'Denied') {
+            console.log('ResidencyVerification: ❌ DENIED! Stopping polling');
+            
+            // PERSIST denied status in ref - prevents prop resets!
+            finalStatusRef.current = 'denied';
+            
+            setOverrideStatus('denied');
+            handleDeniedVerification();
+            notifyParentOfPollingUpdate(profile || { verification_status: 'denied' });
+            setForceUpdate(prev => prev + 1);
+          }
+          
+        } catch (error) {
+          console.error('Error checking verification status:', error);
+        }
+      }, 3000); // Check every 3 seconds for real-time updates
+      
+      return () => {
+        console.log('ResidencyVerification: Cleaning up polling interval');
+        clearInterval(statusCheck);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imagePath]);
+
+  // No additional polling needed - main polling above handles everything!
+
+  // Status message and styling based on verification state
+  const getStatusInfo = () => {
+    switch (status) {
+      case 'pending':
+        return {
+          message: 'Your residency verification is under review. Once approved, you can complete your profile.',
+          icon: <Clock className="w-5 h-5 text-yellow-500" />,
+          bgColor: 'bg-yellow-50',
+          textColor: 'text-yellow-700',
+          borderColor: 'border-yellow-200'
+        };
+      case 'approved':
+        return {
+          message: 'Your residency has been verified! You can now complete your profile.',
+          icon: <CheckCircle className="w-5 h-5 text-green-500" />,
+          bgColor: 'bg-green-50',
+          textColor: 'text-green-700',
+          borderColor: 'border-green-200'
+        };
+      case 'denied':
+        return {
+          message: form.denial_reason || 'Your verification was denied. Please upload a new verification document.',
+          icon: <XCircle className="w-5 h-5 text-red-500" />,
+          bgColor: 'bg-red-50',
+          textColor: 'text-red-700',
+          borderColor: 'border-red-200'
+        };
+      default:
+        return {
+          message: 'Please upload a document to verify your residency.',
+          icon: <AlertCircle className="w-5 h-5 text-blue-500" />,
+          bgColor: 'bg-blue-50',
+          textColor: 'text-blue-700',
+          borderColor: 'border-blue-200'
+        };
+    }
+  };
+
+  // Resolve absolute/relative string paths and File objects into a usable img src
+  const getImageSrc = (ip) => {
+    if (!ip) {
+      return '';
+    }
+    
+    if (typeof ip !== 'string') {
+      return URL.createObjectURL(ip);
+    }
+    
+    if (ip.startsWith('http://') || ip.startsWith('https://')) {
+      const url = `${ip}?t=${Date.now()}`;
+      return url;
+    }
+    
+    // Fix: Use the correct backend URL for image serving
+    // In development, use localhost:8000, in production use relative path
+    const isDevelopment = import.meta.env.DEV;
+    let baseUrl;
+    
+    if (isDevelopment) {
+      baseUrl = 'http://localhost:8000';
+    } else {
+      baseUrl = ''; // Use relative path in production
+    }
+    
+    const url = `${baseUrl}/storage/${ip}?t=${Date.now()}`;
+    return url;
+  };
+
+  // handleImageUpload function moved to DocumentUpload component
+
+  // 1) If residency is already verified, calculate approved status first
+  // Check finalStatusRef FIRST (persisted status), then other sources
+  const isApproved = finalStatusRef.current === 'approved' || 
+                    status === 'approved' || 
+                    form.verification_status === 'approved' || 
+                    profileData.verification_status === 'approved' ||
+                    user?.profile?.verification_status === 'approved';
+
+  // Notify parent component when approved status is detected
+  // IMPORTANT: This hook must come BEFORE any conditional returns to follow Rules of Hooks
+  useEffect(() => {
+    console.log('ResidencyVerification: Notification useEffect running. isApproved:', isApproved, 'onImageUpload exists:', !!onImageUpload);
+    
+    if (isApproved && onImageUpload) {
+      console.log('ResidencyVerification: ✅ Notifying parent of approved status');
+      const approvedData = {
+        verification_status: 'approved',
+        residency_verification_image: imagePath || form.residency_verification_image || profileData.residency_verification_image,
+        profile_completed: form.profile_completed
+      };
+      console.log('ResidencyVerification: Sending approved data to parent:', approvedData);
+      onImageUpload(approvedData);
+    } else if (isApproved && !onImageUpload) {
+      console.log('ResidencyVerification: ⚠️ Approved but no onImageUpload callback provided');
+    }
+    // Only depend on isApproved to avoid infinite loops from onImageUpload recreating
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isApproved]); // Only run when isApproved changes
+
+  // Show loading state while data is being initialized
+  // Show loading if we're still loading OR if we don't have any data at all
+  const hasAnyData = overrideStatus || form.verification_status || profileData.verification_status || user?.profile?.verification_status || imagePath || Object.keys(form).length > 0 || Object.keys(profileData).length > 0;
+  
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  // Check if we have any verification data - use same logic as getCurrentStep
+  const hasValidStatus = (overrideStatus && overrideStatus !== '') || 
+    (form.verification_status && form.verification_status !== '') || 
+    (profileData.verification_status && profileData.verification_status !== '') || 
+    (user?.profile?.verification_status && user?.profile?.verification_status !== '');
+  const hasValidImage = (imagePath && imagePath !== '') || 
+    (form.residency_verification_image && form.residency_verification_image !== '') || 
+    (profileData.residency_verification_image && profileData.residency_verification_image !== '') || 
+    (user?.profile?.residency_verification_image && user?.profile?.residency_verification_image !== '');
+  
+  // For general verification data check: any status OR any image
+  const hasAnyVerificationData = hasValidStatus || hasValidImage;
+  
+  console.log('ResidencyVerification: Render check - isApproved:', isApproved, 'status:', status, 'overrideStatus:', overrideStatus, 'finalStatusRef:', finalStatusRef.current, 'formStatus:', form.verification_status, 'profileStatus:', profileData.verification_status);
+                    
+  if (isApproved) {
+    return (
+      <div className="space-y-8 animate-fade-in">
+        
+        <StepTracker currentStep={currentStep} />
+        
+        {/* Enhanced Success Container */}
+        <div className="relative w-full bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-3xl flex flex-col items-center py-16 px-6 shadow-2xl border-2 border-green-200 overflow-hidden">
+          
+          {/* Decorative Background Elements */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-10 left-10 w-40 h-40 bg-green-400 rounded-full blur-3xl animate-pulse"></div>
+            <div className="absolute bottom-10 right-10 w-48 h-48 bg-emerald-400 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+            <div className="absolute top-1/2 left-1/3 w-32 h-32 bg-teal-300 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+          </div>
+          
+          {/* Success Icon - Larger and More Prominent */}
+          <div className="relative z-10 mb-8">
+            <div className="relative">
+              {/* Outer glow ring */}
+              <div className="absolute inset-0 w-32 h-32 bg-green-400 rounded-full blur-2xl opacity-50 animate-ping"></div>
+              
+              {/* Main icon circle */}
+              <div className="relative w-32 h-32 bg-gradient-to-br from-green-500 via-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-2xl animate-scale-in">
+                <CheckCircle className="w-16 h-16 text-white" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Title and Description */}
+          <div className="relative z-10 text-center max-w-2xl mb-8">
+            <h3 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-700 via-emerald-600 to-teal-600 mb-4 drop-shadow-sm">
+              Residency Verified
+            </h3>
+            <p className="text-lg text-green-700 font-semibold mb-3">
+              Successfully approved by administrators
+            </p>
+            <p className="text-base text-green-600 leading-relaxed px-4">
+              Your residency has been verified by the barangay staff. You can now proceed with completing your profile.
+            </p>
+          </div>
+          
+          {/* Success Details Card */}
+          <div className="relative z-10 mb-8 w-full max-w-md">
+            <div className="bg-white/80 backdrop-blur-sm border-2 border-green-300 rounded-2xl px-8 py-6 shadow-xl">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <CheckCircle className="w-7 h-7 text-white" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-xl text-green-900">Verification Complete</p>
+                  <p className="text-sm text-green-600 font-medium">Your account is now verified</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-green-200">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-green-700 font-medium">Approved Date:</span>
+                  <span className="text-green-800 font-bold">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Enhanced CTA Button */}
+          <button 
+            onClick={() => {
+              console.log('ResidencyVerification: Complete Profile button clicked');
+              console.log('ResidencyVerification: onImageUpload exists?', !!onImageUpload);
+              console.log('ResidencyVerification: onImageUpload type:', typeof onImageUpload);
+              console.log('ResidencyVerification: onImageUpload value:', onImageUpload);
+              
+              // Force notification to parent to trigger profile form display
+              if (onImageUpload) {
+                const approvedData = {
+                  verification_status: 'approved',
+                  residency_verification_image: imagePath || form.residency_verification_image || profileData.residency_verification_image,
+                  profile_completed: form.profile_completed
+                };
+                console.log('ResidencyVerification: ✅ Manually triggering parent notification:', approvedData);
+                onImageUpload(approvedData);
+              } else {
+                console.error('ResidencyVerification: ❌ ERROR - onImageUpload callback is not defined!');
+                console.log('ResidencyVerification: Current props:', { form, profileData, onImageUpload });
+              }
+              
+              // Scroll to top to show the profile form
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="relative z-10 group bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white font-bold text-lg px-12 py-5 rounded-2xl flex items-center gap-4 transition-all duration-300 shadow-2xl hover:shadow-green-500/50 transform hover:scale-105 hover:-translate-y-1 bg-size-200 animate-gradient cursor-pointer"
+          >
+            {/* Glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-400 rounded-2xl blur-xl opacity-50 group-hover:opacity-75 transition-opacity"></div>
+            
+            <CheckCircle className="relative w-7 h-7 animate-pulse" />
+            <span className="relative">Complete Your Profile Now</span>
+            <svg className="relative w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+            
+          
+          {/* Enhanced Document Preview */}
+          <div className="relative z-10 mt-10 w-full max-w-lg">
+            <div className="text-center mb-4">
+              <p className="text-sm text-green-700 font-semibold flex items-center justify-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                Verified Document
+              </p>
+            </div>
+            
+            {imagePath && !imageLoadError ? (
+              <div className="relative group">
+                <img 
+                  src={getImageSrc(imagePath)} 
+                  alt="Verified Document" 
+                  className="w-full h-auto max-h-96 object-contain rounded-2xl border-4 border-green-300 shadow-2xl mx-auto hover:shadow-green-500/30 transition-all duration-300 transform group-hover:scale-[1.02] bg-white p-2"
+                  onError={(e) => {
+                    setImageLoadError(true);
+                  }}
+                  onLoad={() => {
+                    setImageLoadError(false);
+                  }}
+                />
+                {/* Verified badge on image */}
+                <div className="absolute top-4 right-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-2xl flex items-center gap-2 border-2 border-white">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Verified</span>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full h-64 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border-4 border-green-200 shadow-xl flex flex-col items-center justify-center p-8">
+                <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mb-4 shadow-lg">
+                  <CheckCircle className="w-12 h-12 text-white" />
+                </div>
+                <p className="text-green-800 font-bold text-lg text-center">
+                  Document Verified
+                </p>
+                <p className="text-green-600 text-sm text-center mt-2">
+                  Your residency document has been approved
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2) If residency verification is denied, show upload state (Step 1) with denial notice
+  if (status === 'denied' || form.verification_status === 'denied') {
+    return (
+      <div className="space-y-8">
+        <StepTracker currentStep={currentStep} />
+        <DocumentUpload 
+          onUploadSuccess={(data) => {
+            setUploadedImagePath(data.imagePath);
+            setOverrideStatus(data.status);
+            if (onImageUpload) {
+              onImageUpload(data);
+            }
+          }}
+          onUploadError={(error) => {
+            console.error('Upload error:', error);
+          }}
+          showDenialNotice={true}
+          denialReason={form.denial_reason}
+          isRetry={true}
+        />
+      </div>
+    );
+  }
+
+  // If there's no residency verification image, show the upload prompt
+  // Only exclude if status is denied (which has its own UI)
+  // Also check if we're actually on step 1 (no verification data at all)
+  if (!imagePath && status !== 'denied' && currentStep === 1) {
+    return (
+      <div className="space-y-8">
+        <StepTracker currentStep={currentStep} />
+        <DocumentUpload 
+          onUploadSuccess={(data) => {
+            setUploadedImagePath(data.imagePath);
+            setOverrideStatus(data.status);
+            if (onImageUpload) {
+              onImageUpload(data);
+            }
+          }}
+          onUploadError={(error) => {
+            console.error('Upload error:', error);
+          }}
+          showDenialNotice={false}
+          isRetry={false}
+        />
+      </div>
+    );
+  }
+
+  // If we have an image and are on step 2 (Document Under Review), show the pending UI
+  if (imagePath && currentStep === 2) {
+    return (
+      <div className="space-y-8">
+        <StepTracker currentStep={currentStep} />
+        <VerificationPending 
+          imagePath={imagePath}
+          status={status}
+          onStatusChange={(data) => {
+            setOverrideStatus(data.status);
+            if (data.imagePath) {
+              setUploadedImagePath(data.imagePath);
+            }
+            if (onImageUpload) {
+              onImageUpload(data.profile || data);
+            }
+          }}
+          onRefresh={(profile) => {
+            if (onImageUpload) {
+              onImageUpload(profile);
+            }
+          }}
+          denialReason={form.denial_reason}
+        />
+        
+        {/* Beautiful Modal */}
+        <Modal
+          isOpen={modal.isOpen}
+          onClose={closeModal}
+          type={modal.type}
+          title={modal.title}
+          message={modal.message}
+          icon={modal.icon}
+          showProfileButton={modal.showProfileButton}
+          onProfileClick={handleProfileClick}
+        />
+      </div>
+    );
+  }
+
+  // Fallback: show the pending UI (image present, status unknown or pending)
+  return (
+    <div className="space-y-8">
+      <StepTracker currentStep={currentStep} />
+      <VerificationPending 
+        imagePath={imagePath}
+        status={status}
+        onStatusChange={(data) => {
+          setOverrideStatus(data.status);
+          if (data.imagePath) {
+            setUploadedImagePath(data.imagePath);
+          }
+          if (onImageUpload) {
+            onImageUpload(data.profile || data);
+          }
+        }}
+        onRefresh={(profile) => {
+          if (onImageUpload) {
+            onImageUpload(profile);
+          }
+        }}
+        denialReason={form.denial_reason}
+      />
+      
+      {/* Beautiful Modal */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={closeModal}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        icon={modal.icon}
+        showProfileButton={modal.showProfileButton}
+        onProfileClick={handleProfileClick}
+      />
+    </div>
+  );
+};
+
+export default ResidencyVerification;
